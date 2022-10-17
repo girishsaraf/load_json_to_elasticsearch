@@ -1,37 +1,31 @@
 import os
 import json
-import requests
 import argparse
 from elasticsearch import Elasticsearch, helpers
+from elasticsearch import RequestError
 
 
-def is_connected(**kwargs):
-    if requests.get("http://{}:{}".format(kwargs["host"], kwargs["port"])).status_code == 200:
-        return True
-    return False
+# Creates an ElasticSearch Index
+def create_index(es_conn, index_name):
+    try:
+        if check_if_connected(es_conn_object=es_conn):
+            es_conn.indices.create(index_name)
+        else:
+            raise RequestError()
+    except Exception as exc:
+        print("Error: {}".format(str(exc)))
+        raise Exception("Error: {}".format(str(exc)))
 
 
-def is_index_exists(**kwargs):
-    if requests.get("http://{}:{}/{}".format(kwargs["host"], kwargs["port"], kwargs["index"])).status_code == 200:
-        return True
-    return False
-
-
-def delete_index(**kwargs):
-    return requests.delete("http://{}:{}/{}".format(kwargs["host"], kwargs["port"], kwargs["index"]))
-
-
-def create_index(**kwargs):
-    return requests.put("http://{}:{}/{}".format(kwargs["host"], kwargs["port"], kwargs["index"]))
-
-
-def insert_to_index(list_json_data, index_name):
+# Inserts data in bulk to index
+def insert_to_index(es_connection, list_json_data, index_name):
     try:
         print("Inserting data into {} ...".format(index_name))
         resp = helpers.bulk(
-            es,
+            es_connection,
             list_json_data,
-            index=index_name
+            index=index_name,
+            raise_on_error=False
         )
         print("helpers.bulk() RESPONSE:", resp)
         print("helpers.bulk() RESPONSE:", json.dumps(resp, indent=4))
@@ -41,6 +35,41 @@ def insert_to_index(list_json_data, index_name):
         return False
 
 
+# Delete index from ElasticSearch Cluster
+def delete_index(es_conn, index_name=None):
+    try:
+        if check_if_connected(es_conn_object=es_conn):
+            es_conn.options(
+                ignore_status=[400, 404]
+            ).indices.delete(index=index_name)
+        else:
+            raise RequestError()
+    except Exception as exc:
+        raise Exception("Error: {}".format(str(exc)))
+
+
+# Returns Status of Conn
+def get_status_value(response_object):
+    try:
+        return "Successful" if response_object.status_code == 200 \
+            else "Insert Successful" if response_object.status_code == 201 \
+            else response_object
+    except Exception as exc:
+        return "Error: {}".format(str(exc))
+
+
+# Check if index exists in the ES Cluster
+def check_if_index_exists(es_conn_object, index_name):
+    try:
+        if not es_conn_object.indices.exists(index=index_name):
+            return False
+        return True
+    except Exception as exc:
+        print("Error: {}".format(str(exc)))
+        raise 
+
+
+# Loads json file into memory
 def load_json(json_file_path):
     try:
         json_list = []
@@ -54,67 +83,89 @@ def load_json(json_file_path):
         return []
 
 
-def get_status_value(response_object):
+# Returns whether elastic is connected
+def check_if_connected(es_conn_object=None):
     try:
-        return "Successful" if response_object.status_code == 200 \
-            else "Insert Successful" if response_object.status_code == 201 \
-            else response_object
+        if not es_conn_object.ping():
+            return False
+        return True
     except Exception as exc:
-        return "Error: {}".format(str(exc))
+        print("Error: {}".format(str(exc)))
+        return False
 
 
+# Returns an ElasticSearch Connection Object
+def get_elastic_connection(hostname):
+    try:
+        es_conn_obj = Elasticsearch(hostname)
+        return es_conn_obj
+    except Exception as exc:
+        print("Error: {}".format(str(exc)))
+        return None
+
+
+# Starter Code
 if __name__ == "__main__":
 
     # Parse user input args
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", help="Host server of the destination elasticsearch", default="localhost")
-    parser.add_argument("--port", help="Port of the destination elasticsearch", default="9200")
-    parser.add_argument("--index", help="Name of the index to be created", default="base_index")
-    parser.add_argument("--json_file", help="Path of the json file input", required=True)
-    parser.add_argument("--json_directory", help="Directory from which to parse all json files", default="")
+    parser.add_argument(
+        "--host", 
+        help="Elastic Search Host", 
+        default="http://localhost:9200"
+    )
+    parser.add_argument(
+        "--index", 
+        help="Name of the index to be created", 
+        default="base_index"
+    )
+    parser.add_argument(
+        "--json_file", 
+        help="Path of the json file input", 
+        default=""
+    )
+    parser.add_argument(
+        "--json_directory", 
+        help="Directory from which to parse all json files", 
+        default=""
+    )
     args = parser.parse_args()
 
     # Fetch values from user input or default values
-    host, port, index, json_file, json_dir = args.host, args.port, args.index, args.json_file, args.json_directory
+    host = args.host
+    index = args.index
+    json_file = args.json_file
+    json_dir = args.json_directory
 
-    # Create a new connection object
-    connection_object = {
-        "host": host,
-        "port": port,
-        "index": index
-    }
+    try:
+        elastic_connection = get_elastic_connection(host)
 
-    es = Elasticsearch(host)
-
-    # Check if index exists, then ask if it needs to be deleted, else add to index
-    if is_connected(**connection_object):
-        if is_index_exists(**connection_object):
-            print("{} exists in Elasticsearch server.".format(index))
-            choice = input("Would you like to delete? [y/n]")
-            if choice.lower() == "y":
-                print("Deleting {} ...".format(index))
-                print(get_status_value(delete_index(**connection_object)))
-            elif choice.lower() == "n":
-                pass
+        # Check if index exists, then ask if it needs to be deleted, else add to index
+        if check_if_connected(elastic_connection):
+            print("Connected to ES Cluster - {}".format(host))
+            if check_if_index_exists(elastic_connection, index):
+                print("{} already exists on the cluster".format(index))
+                choice = input("Would you like to delete the index? [y/n]")
+                if choice.lower() == "y":
+                    print("Deleting index - {}".format(index))
+                elif choice.lower() == "n":
+                    pass
+                else:
+                    raise ValueError("Invalid choice")
             else:
-                raise ValueError("Invalid choice")
-        else:
-            print("Creating {} ...".format(index))
-            print(get_status_value(create_index(**connection_object)))
+                print("Creating Index - {}".format(index))
 
-        if json_dir != "":
-            for path in os.listdir(json_dir):
-                # check if current path is a file
-                if os.path.isfile(os.path.join(json_dir, path)):
-                    file_name = os.path.join(json_dir, path)
-                    data = load_json(file_name)
-                    if insert_to_index(data, index):
-                        print("Indexing Successful for file {}".format(file_name))
-                    else:
-                        print("Error Occurred for file {}".format(file_name))
-        else:
-            data = load_json(json_file)
-            if insert_to_index(data, index):
-                print("Indexing Successful")
+            if json_dir != "":
+                for path in os.listdir(json_dir):
+                    # check if current path is a json file
+                    file_ext = path.split('.')[-1].lower()
+                    if os.path.isfile(os.path.join(json_dir, path)) and file_ext == "json":
+                        file_name = os.path.join(json_dir, path)
+                        data = load_json(file_name)
+                        insert_to_index(elastic_connection, data, index)
             else:
-                print("Error Occurred")
+                data = load_json(json_file)
+                insert_to_index(elastic_connection, data, index)
+    except Exception as exc:
+        print("Error: {}".format(str(exc)))
+        raise Exception("Error: {}".format(str(exc)))
