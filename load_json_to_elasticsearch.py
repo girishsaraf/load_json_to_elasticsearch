@@ -1,15 +1,34 @@
 import os
 import json
 import argparse
+import time
+
 from elasticsearch import Elasticsearch, helpers
 from elasticsearch import RequestError
+
+INDEX_CONFIG_FILE = "index_config.json"
+
+
+# Load Index Config from JSON file
+def get_index_config_dict():
+    try:
+        with open(INDEX_CONFIG_FILE) as config_file:
+            config_detail_dict = json.load(config_file)
+        return config_detail_dict
+    except Exception as exc:
+        print("Error: {}".format(str(exc)))
+        raise Exception("Error: {}".format(str(exc)))
 
 
 # Creates an ElasticSearch Index
 def create_index(es_conn, index_name):
     try:
+        config_detail = get_index_config_dict()
         if check_if_connected(es_conn_object=es_conn):
-            es_conn.indices.create(index_name)
+            es_conn.indices.create(
+                index_name,
+                body=config_detail
+            )
         else:
             raise RequestError()
     except Exception as exc:
@@ -17,19 +36,24 @@ def create_index(es_conn, index_name):
         raise Exception("Error: {}".format(str(exc)))
 
 
-# Inserts data in bulk to index
-def insert_to_index(es_connection, list_json_data, index_name):
+# Inserts data in bulk to index, retries 5 times in gaps of 5 seconds if not connected
+def insert_to_index(es_connection, list_json_data, index_name, retry_count = 0):
     try:
-        print("Inserting data into {} ...".format(index_name))
-        resp = helpers.bulk(
-            es_connection,
-            list_json_data,
-            index=index_name,
-            raise_on_error=False
-        )
-        print("helpers.bulk() RESPONSE:", resp)
-        print("helpers.bulk() RESPONSE:", json.dumps(resp, indent=4))
-        return True
+        if check_if_connected(es_connection) and retry_count < 5:
+            print("Inserting data into {} ...".format(index_name))
+            resp = helpers.bulk(
+                es_connection,
+                list_json_data,
+                index=index_name,
+                raise_on_error=False
+            )
+            print("helpers.bulk() RESPONSE:", resp)
+            print("helpers.bulk() RESPONSE:", json.dumps(resp, indent=4))
+            return True
+        else:
+            print("Connection lost, waiting 5 seconds for retry...")
+            time.sleep(5)
+            insert_to_index(es_connection, list_json_data, index_name, retry_count+1)
     except Exception as exc:
         print("Error: {}".format(str(exc)))
         return False
@@ -148,6 +172,7 @@ if __name__ == "__main__":
                 choice = input("Would you like to delete the index? [y/n]")
                 if choice.lower() == "y":
                     print("Deleting index - {}".format(index))
+                    delete_index(elastic_connection, index)
                 elif choice.lower() == "n":
                     pass
                 else:
