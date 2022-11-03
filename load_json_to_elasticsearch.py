@@ -12,6 +12,7 @@ ELASTIC_CONN_CONFIG = {
     "retry_on_timeout": True
 }
 
+
 class CustomException(Exception):
     pass
 
@@ -20,8 +21,8 @@ class CustomException(Exception):
 def get_index_config_dict(filename):
     try:
         with open(filename) as config_file:
-            config_detail_dict = json.load(config_file)
-        return config_detail_dict
+            config_dict = json.load(config_file)
+        return config_dict
     except Exception as e:
         print("Error: {}".format(str(e)))
         raise Exception("Error: {}".format(str(e)))
@@ -36,7 +37,7 @@ def create_index(es_conn, index_name):
             es_conn.indices.create(
                 index=index_name,
                 settings=config_setting,
-                mappings=config_mapping
+                mappings={}
             )
         else:
             raise CustomException("Connection error")
@@ -189,17 +190,18 @@ if __name__ == "__main__":
                 print("Creating Index - {}".format(index))
                 create_index(elastic_connection, index)
 
-            if json_dir != "":
-                for path in os.listdir(json_dir):
-                    # check if current path is a json file
-                    _, file_ext = os.path.splitext(path)
-                    if os.path.isfile(os.path.join(json_dir, path)) and file_ext.lower() == ".json":
-                        file_name = os.path.join(json_dir, path)
-                        data = load_json(file_name)
-                        insert_to_index(elastic_connection, data, index)
-            else:
-                data = load_json(json_file)
-                insert_to_index(elastic_connection, data, index)
+        if json_dir != "":
+            for path in os.listdir(json_dir):
+                # check if current path is a json file
+                _, file_ext = os.path.splitext(path)
+                if os.path.isfile(os.path.join(json_dir, path)) and file_ext.lower() == ".json":
+                    file_name = os.path.join(json_dir, path)
+                    print("Working on file: {}".format(file_name))
+                    data = load_json(file_name)
+                    insert_to_index(elastic_connection, data, index)
+        else:
+            data = load_json(json_file)
+            insert_to_index(elastic_connection, data, index)
     except Exception as exc:
         print("Error: {}".format(str(exc)))
         raise Exception("Error: {}".format(str(exc)))
