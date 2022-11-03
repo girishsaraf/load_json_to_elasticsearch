@@ -6,7 +6,11 @@ from elasticsearch import Elasticsearch, helpers
 
 INDEX_MAPPING_FILE = "index_mapping.json"
 INDEX_SETTING_FILE = "index_settings.json"
-
+ELASTIC_CONN_CONFIG = {
+    "request_timeout": 30,
+    "max_retries": 10,
+    "retry_on_timeout": True
+}
 
 class CustomException(Exception):
     pass
@@ -123,9 +127,7 @@ def get_elastic_connection(hostname):
     try:
         es_conn_obj = Elasticsearch(
             hostname,
-            request_timeout=30,
-            max_retries=10,
-            retry_on_timeout=True
+            **ELASTIC_CONN_CONFIG
         )
         return es_conn_obj
     except Exception as e:
@@ -190,8 +192,8 @@ if __name__ == "__main__":
             if json_dir != "":
                 for path in os.listdir(json_dir):
                     # check if current path is a json file
-                    file_ext = path.split('.')[-1].lower()
-                    if os.path.isfile(os.path.join(json_dir, path)) and file_ext == "json":
+                    _, file_ext = os.path.splitext(path)
+                    if os.path.isfile(os.path.join(json_dir, path)) and file_ext.lower() == ".json":
                         file_name = os.path.join(json_dir, path)
                         data = load_json(file_name)
                         insert_to_index(elastic_connection, data, index)
