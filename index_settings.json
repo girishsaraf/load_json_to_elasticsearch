@@ -1,0 +1,17 @@
+{
+        "index": {
+            "number_of_shards": 15,
+            "number_of_replicas": 1
+        },
+        "index.mapping.ignore_malformed": true,
+        "analysis": {
+            "analyzer": {
+                "english_exact": {
+                    "tokenizer": "standard",
+                    "filter": [
+                        "lowercase"
+                    ]
+                }
+            }
+        }
+    }

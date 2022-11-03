@@ -1,18 +1,21 @@
 import os
 import json
 import argparse
-import time
 
 from elasticsearch import Elasticsearch, helpers
 from elasticsearch import RequestError
 
-INDEX_CONFIG_FILE = "index_config.json"
+INDEX_MAPPING_FILE = "index_mapping.json"
+INDEX_SETTING_FILE = "index_settings.json"
 
+
+class CustomException(Exception):
+    pass
 
 # Load Index Config from JSON file
-def get_index_config_dict():
+def get_index_config_dict(filename):
     try:
-        with open(INDEX_CONFIG_FILE) as config_file:
+        with open(filename) as config_file:
             config_detail_dict = json.load(config_file)
         return config_detail_dict
     except Exception as exc:
@@ -23,37 +26,33 @@ def get_index_config_dict():
 # Creates an ElasticSearch Index
 def create_index(es_conn, index_name):
     try:
-        config_detail = get_index_config_dict()
+        config_setting = get_index_config_dict(INDEX_SETTING_FILE)
+        config_mapping = get_index_config_dict(INDEX_MAPPING_FILE)
         if check_if_connected(es_conn_object=es_conn):
             es_conn.indices.create(
-                index_name,
-                body=config_detail
+                index=index_name,
+                settings=config_setting,
+                mappings=config_mapping
             )
         else:
-            raise RequestError()
+            raise CustomException("Connection error")
     except Exception as exc:
         print("Error: {}".format(str(exc)))
         raise Exception("Error: {}".format(str(exc)))
 
 
 # Inserts data in bulk to index, retries 5 times in gaps of 5 seconds if not connected
-def insert_to_index(es_connection, list_json_data, index_name, retry_count = 0):
+def insert_to_index(es_connection, list_json_data, index_name):
     try:
-        if check_if_connected(es_connection) and retry_count < 5:
-            print("Inserting data into {} ...".format(index_name))
-            resp = helpers.bulk(
-                es_connection,
-                list_json_data,
-                index=index_name,
-                raise_on_error=False
-            )
-            print("helpers.bulk() RESPONSE:", resp)
-            print("helpers.bulk() RESPONSE:", json.dumps(resp, indent=4))
-            return True
-        else:
-            print("Connection lost, waiting 5 seconds for retry...")
-            time.sleep(5)
-            insert_to_index(es_connection, list_json_data, index_name, retry_count+1)
+        print("Inserting data into {} ...".format(index_name))
+        resp = helpers.bulk(
+            es_connection,
+            list_json_data,
+            index=index_name,
+            raise_on_error=False
+        )
+        print("Data indexed : {} rows".format(len(list_json_data)))
+        return True
     except Exception as exc:
         print("Error: {}".format(str(exc)))
         return False
@@ -67,7 +66,8 @@ def delete_index(es_conn, index_name=None):
                 ignore_status=[400, 404]
             ).indices.delete(index=index_name)
         else:
-            raise RequestError()
+            raise CustomException("Connection error")
+        print("Index {} deleted".format(index_name))
     except Exception as exc:
         raise Exception("Error: {}".format(str(exc)))
 
@@ -121,7 +121,12 @@ def check_if_connected(es_conn_object=None):
 # Returns an ElasticSearch Connection Object
 def get_elastic_connection(hostname):
     try:
-        es_conn_obj = Elasticsearch(hostname)
+        es_conn_obj = Elasticsearch(
+            hostname,
+            request_timeout=30,
+            max_retries=10,
+            retry_on_timeout=True
+        )
         return es_conn_obj
     except Exception as exc:
         print("Error: {}".format(str(exc)))
@@ -173,12 +178,14 @@ if __name__ == "__main__":
                 if choice.lower() == "y":
                     print("Deleting index - {}".format(index))
                     delete_index(elastic_connection, index)
+                    create_index(elastic_connection, index)
                 elif choice.lower() == "n":
                     pass
                 else:
                     raise ValueError("Invalid choice")
             else:
                 print("Creating Index - {}".format(index))
+                create_index(elastic_connection, index)
 
             if json_dir != "":
                 for path in os.listdir(json_dir):

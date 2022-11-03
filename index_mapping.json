@@ -1,20 +1,4 @@
 {
-    "settings": {
-        "index.mapping.ignore_malformed": true,
-        "number_of_shards": 12,
-        "number_of_replicas": 1,
-        "analysis": {
-            "analyzer": {
-                "english_exact": {
-                    "tokenizer": "standard",
-                    "filter": [
-                        "lowercase"
-                    ]
-                }
-            }
-        }
-    },
-    "mappings": {
             "properties": {
                 "coordinates": {
                     "properties": {
@@ -99,4 +83,3 @@
                 }
             }
         }
-}
