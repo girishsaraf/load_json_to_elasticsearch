@@ -1,9 +1,8 @@
 import os
 import json
 import argparse
-
 from elasticsearch import Elasticsearch, helpers
-from elasticsearch import RequestError
+
 
 INDEX_MAPPING_FILE = "index_mapping.json"
 INDEX_SETTING_FILE = "index_settings.json"
@@ -12,15 +11,16 @@ INDEX_SETTING_FILE = "index_settings.json"
 class CustomException(Exception):
     pass
 
+
 # Load Index Config from JSON file
 def get_index_config_dict(filename):
     try:
         with open(filename) as config_file:
             config_detail_dict = json.load(config_file)
         return config_detail_dict
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
-        raise Exception("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
+        raise Exception("Error: {}".format(str(e)))
 
 
 # Creates an ElasticSearch Index
@@ -36,16 +36,16 @@ def create_index(es_conn, index_name):
             )
         else:
             raise CustomException("Connection error")
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
-        raise Exception("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
+        raise Exception("Error: {}".format(str(e)))
 
 
 # Inserts data in bulk to index, retries 5 times in gaps of 5 seconds if not connected
 def insert_to_index(es_connection, list_json_data, index_name):
     try:
         print("Inserting data into {} ...".format(index_name))
-        resp = helpers.bulk(
+        helpers.bulk(
             es_connection,
             list_json_data,
             index=index_name,
@@ -53,8 +53,8 @@ def insert_to_index(es_connection, list_json_data, index_name):
         )
         print("Data indexed : {} rows".format(len(list_json_data)))
         return True
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
         return False
 
 
@@ -68,8 +68,8 @@ def delete_index(es_conn, index_name=None):
         else:
             raise CustomException("Connection error")
         print("Index {} deleted".format(index_name))
-    except Exception as exc:
-        raise Exception("Error: {}".format(str(exc)))
+    except Exception as e:
+        raise Exception("Error: {}".format(str(e)))
 
 
 # Returns Status of Conn
@@ -78,8 +78,8 @@ def get_status_value(response_object):
         return "Successful" if response_object.status_code == 200 \
             else "Insert Successful" if response_object.status_code == 201 \
             else response_object
-    except Exception as exc:
-        return "Error: {}".format(str(exc))
+    except Exception as e:
+        return "Error: {}".format(str(e))
 
 
 # Check if index exists in the ES Cluster
@@ -88,8 +88,8 @@ def check_if_index_exists(es_conn_object, index_name):
         if not es_conn_object.indices.exists(index=index_name):
             return False
         return True
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
         raise 
 
 
@@ -102,8 +102,8 @@ def load_json(json_file_path):
                 json_data = json.loads(json_obj)
                 json_list.append(json_data)
         return json_list
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
         return []
 
 
@@ -113,8 +113,8 @@ def check_if_connected(es_conn_object=None):
         if not es_conn_object.ping():
             return False
         return True
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
         return False
 
 
@@ -128,8 +128,8 @@ def get_elastic_connection(hostname):
             retry_on_timeout=True
         )
         return es_conn_obj
-    except Exception as exc:
-        print("Error: {}".format(str(exc)))
+    except Exception as e:
+        print("Error: {}".format(str(e)))
         return None
 
 
