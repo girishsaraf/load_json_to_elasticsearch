@@ -3,7 +3,7 @@ import json
 import argparse
 from elasticsearch import Elasticsearch, helpers
 
-
+ADD_ADDITIONAL_KEY = True
 INDEX_MAPPING_FILE = "index_mapping.json"
 INDEX_SETTING_FILE = "index_settings.json"
 ELASTIC_CONN_CONFIG = {
@@ -11,6 +11,12 @@ ELASTIC_CONN_CONFIG = {
     "max_retries": 10,
     "retry_on_timeout": True
 }
+ADDITIONAL_KEY = "caidac"
+ADDITIONAL_VALUE = {
+        "dataset": None,
+        "author": "cbuntain",
+        "metadata": None
+    }
 
 
 class CustomException(Exception):
@@ -98,6 +104,19 @@ def check_if_index_exists(es_conn_object, index_name):
         raise 
 
 
+# Add Additional Metadata to JSON - directory name in our case
+def add_additional_key(file_path, json_obj):
+    try:
+        dir_name = os.path.basename(os.path.dirname(file_path))
+        value = ADDITIONAL_VALUE
+        value["dataset"] = dir_name
+        json_obj[ADDITIONAL_KEY] = value
+        return json_obj
+    except Exception as json_e:
+        print("Error: {}".format(str(json_e)))
+        return json_obj
+
+
 # Loads json file into memory
 def load_json(json_file_path):
     try:
@@ -105,6 +124,8 @@ def load_json(json_file_path):
         with open(json_file_path) as file_data:
             for json_obj in file_data:
                 json_data = json.loads(json_obj)
+                if ADD_ADDITIONAL_KEY:
+                    json_data = add_additional_key(json_file_path, json_data)
                 json_list.append(json_data)
         return json_list
     except Exception as e:
