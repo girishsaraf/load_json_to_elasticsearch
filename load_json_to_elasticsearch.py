@@ -215,7 +215,7 @@ if __name__ == "__main__":
                 else:
                     raise ValueError("Invalid choice")
             else:
-                print("Creating Indices - {}_date".format(index))
+                print("Creating Indices - {}.date".format(index))
                 # create_index(elastic_connection, index)
 
         if json_dir != "":
