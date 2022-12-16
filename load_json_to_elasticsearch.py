@@ -1,6 +1,7 @@
 import os
 import json
 import argparse
+from datetime import datetime
 from elasticsearch import Elasticsearch, helpers
 
 ADD_ADDITIONAL_KEY = True
@@ -55,11 +56,17 @@ def create_index(es_conn, index_name):
 # Inserts data in bulk to index, retries 5 times in gaps of 5 seconds if not connected
 def insert_to_index(es_connection, list_json_data, index_name):
     try:
-        print("Inserting data into {} ...".format(index_name))
+        first_tweet_data = list_json_data[0]
+        str_date_created = datetime.strptime(first_tweet_data["created_at"], "%Y-%m-%dT%H:%M:%S.%fZ").strftime("%Y%m%d")
+        final_index_name = "{}.{}".format(index_name, str_date_created)
+        if not check_if_index_exists(elastic_connection, index):
+            print("Creating Index - {}".format(final_index_name))
+            create_index(elastic_connection, final_index_name)
+        print("Inserting data into {} ...".format(final_index_name))
         helpers.bulk(
             es_connection,
             list_json_data,
-            index=index_name,
+            index=final_index_name,
             raise_on_error=False
         )
         print("Data indexed : {} rows".format(len(list_json_data)))
@@ -202,14 +209,14 @@ if __name__ == "__main__":
                 if choice.lower() == "y":
                     print("Deleting index - {}".format(index))
                     delete_index(elastic_connection, index)
-                    create_index(elastic_connection, index)
+                    # create_index(elastic_connection, index)
                 elif choice.lower() == "n":
                     pass
                 else:
                     raise ValueError("Invalid choice")
             else:
-                print("Creating Index - {}".format(index))
-                create_index(elastic_connection, index)
+                print("Creating Indices - {}_date".format(index))
+                # create_index(elastic_connection, index)
 
         if json_dir != "":
             for path in os.listdir(json_dir):
